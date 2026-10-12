@@ -1,4 +1,8 @@
 import { AvatarProfile } from '../types/avatar';
+import elenaImg from '../assets/images/avatar_elena_studio_1791733133147.jpg';
+import marcusImg from '../assets/images/avatar_marcus_executive_1791733148537.jpg';
+import sofiaImg from '../assets/images/avatar_sofia_creative_1791733159655.jpg';
+import davidImg from '../assets/images/avatar_david_broadcaster_1791733172062.jpg';
 
 export const DEFAULT_AVATARS: AvatarProfile[] = [
   {
@@ -6,7 +10,7 @@ export const DEFAULT_AVATARS: AvatarProfile[] = [
     name: 'Elena Vance',
     role: 'Tech Keynote & Presenter',
     tagline: 'Warm, articulate, high-definition studio lighting',
-    imageSrc: '/src/assets/images/avatar_elena_studio_1791733133147.jpg',
+    imageSrc: elenaImg,
     gender: 'female',
     defaultVoice: 'Kore',
     defaultEmotion: 'Joyful',
@@ -33,7 +37,7 @@ export const DEFAULT_AVATARS: AvatarProfile[] = [
     name: 'Marcus Sterling',
     role: 'Executive & Strategic Advisor',
     tagline: 'Authoritative, sharp navy suit, poised executive presence',
-    imageSrc: '/src/assets/images/avatar_marcus_executive_1791733148537.jpg',
+    imageSrc: marcusImg,
     gender: 'male',
     defaultVoice: 'Fenrir',
     defaultEmotion: 'Serious',
@@ -60,7 +64,7 @@ export const DEFAULT_AVATARS: AvatarProfile[] = [
     name: 'Sofia Reyes',
     role: 'Creative Director & Producer',
     tagline: 'Natural daylight portrait, deeply empathetic and engaging',
-    imageSrc: '/src/assets/images/avatar_sofia_creative_1791733159655.jpg',
+    imageSrc: sofiaImg,
     gender: 'female',
     defaultVoice: 'Zephyr',
     defaultEmotion: 'Empathetic',
@@ -87,7 +91,7 @@ export const DEFAULT_AVATARS: AvatarProfile[] = [
     name: 'David Hayes',
     role: 'Broadcast News Anchor',
     tagline: 'Modern newsroom studio backdrop, crisp journalistic articulation',
-    imageSrc: '/src/assets/images/avatar_david_broadcaster_1791733172062.jpg',
+    imageSrc: davidImg,
     gender: 'male',
     defaultVoice: 'Puck',
     defaultEmotion: 'Neutral',

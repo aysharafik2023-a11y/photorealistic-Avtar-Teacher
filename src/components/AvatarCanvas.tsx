@@ -49,8 +49,10 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
   useEffect(() => {
     setIsImageLoaded(false);
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.referrerPolicy = 'no-referrer';
+    if (avatar.imageSrc.startsWith('http://') || avatar.imageSrc.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+      img.referrerPolicy = 'no-referrer';
+    }
     img.src = avatar.imageSrc;
     img.onload = () => {
       avatarImageRef.current = img;
@@ -104,14 +106,18 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
   const handleTakeSnapshot = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dataUrl = canvas.toDataURL('image/png');
-    if (onSnapshotTaken) {
-      onSnapshotTaken(dataUrl);
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      if (onSnapshotTaken) {
+        onSnapshotTaken(dataUrl);
+      }
+      const link = document.createElement('a');
+      link.download = `${avatar.name.toLowerCase().replace(/\s+/g, '_')}_${emotionKey.toLowerCase()}_snapshot.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.warn('Canvas snapshot could not be exported:', err);
     }
-    const link = document.createElement('a');
-    link.download = `${avatar.name.toLowerCase().replace(/\s+/g, '_')}_${emotionKey.toLowerCase()}_snapshot.png`;
-    link.href = dataUrl;
-    link.click();
   };
 
   const toggleFullscreen = () => {

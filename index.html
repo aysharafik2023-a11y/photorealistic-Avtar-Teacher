@@ -39,6 +39,35 @@
             return true;
           }
         }, true);
+
+        // Intercept WebSocket constructor to silently catch connection failures in iframe preview
+        try {
+          const NativeWebSocket = window.WebSocket;
+          if (NativeWebSocket) {
+            window.WebSocket = function(url, protocols) {
+              try {
+                const ws = new NativeWebSocket(url, protocols);
+                ws.addEventListener('error', function(err) {
+                  if (typeof err?.stopImmediatePropagation === 'function') {
+                    err.stopImmediatePropagation();
+                  }
+                });
+                return ws;
+              } catch (e) {
+                const fallback = new EventTarget();
+                fallback.close = function() {};
+                fallback.send = function() {};
+                fallback.readyState = 3;
+                return fallback;
+              }
+            };
+            window.WebSocket.prototype = NativeWebSocket.prototype;
+            window.WebSocket.CONNECTING = NativeWebSocket.CONNECTING;
+            window.WebSocket.OPEN = NativeWebSocket.OPEN;
+            window.WebSocket.CLOSING = NativeWebSocket.CLOSING;
+            window.WebSocket.CLOSED = NativeWebSocket.CLOSED;
+          }
+        } catch (_) {}
       })();
     </script>
     <title>VividSync - Real-Time Lip-Sync Avatar Studio</title>
