@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Suppress Vite HMR / WebSocket client connection errors per environment constraints (HMR: Disabled)
+      (function() {
+        function isViteHmrError(eventOrReason) {
+          if (!eventOrReason) return false;
+          const str = (
+            String(eventOrReason.message || '') + ' ' +
+            String(eventOrReason.filename || '') + ' ' +
+            String(eventOrReason.stack || '') + ' ' +
+            String(eventOrReason.reason?.message || '') + ' ' +
+            String(eventOrReason.reason?.stack || '') + ' ' +
+            String(eventOrReason)
+          ).toLowerCase();
+          return (
+            str.includes('websocket') ||
+            str.includes('@vite/client') ||
+            str.includes('createwebsocketmodulerunnertransport') ||
+            str.includes('modulerunner')
+          );
+        }
+
+        window.addEventListener('error', function(event) {
+          if (isViteHmrError(event) || isViteHmrError(event.error)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isViteHmrError(event.reason)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+      })();
+    </script>
+    <title>VividSync - Real-Time Lip-Sync Avatar Studio</title>
+    <meta name="description" content="Photorealistic real-time lip-sync avatar generator with customizable emotions, live microphone input, and neural voice synthesis." />
+    <meta property="og:title" content="VividSync - Real-Time Lip-Sync Avatar Studio" />
+    <meta property="og:description" content="Photorealistic real-time lip-sync avatar generator with customizable emotions, live microphone input, and neural voice synthesis." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-neutral-950 text-neutral-100 antialiased selection:bg-neutral-800 selection:text-neutral-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

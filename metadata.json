@@ -1,0 +1,6 @@
+{
+  "name": "VividSync - Real-Time Lip-Sync Avatar Studio",
+  "description": "Photorealistic real-time lip-sync avatar generator with customizable emotions, live microphone input, and neural voice synthesis.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
