@@ -94,14 +94,33 @@ export const SpeechStudio: React.FC<SpeechStudioProps> = ({
           category: 'Keynote & Presentation',
         }),
       });
-      const data = await res.json();
-      if (data.script) {
-        setScriptText(data.script);
-        setShowPromptInput(false);
-        setTopicPrompt('');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.script) {
+          setScriptText(data.script);
+          setShowPromptInput(false);
+          setTopicPrompt('');
+          return;
+        }
       }
+
+      // Offline / Static preset scripts when backend is unavailable
+      const offlineScripts: Record<string, string> = {
+        Neutral: "Good morning and welcome to our presentation. Today we explore real-time avatar synthesis with locked studio framing and natural articulation.",
+        Happy: "I'm delighted to welcome you to VividSync! Real-time lip synchronization and expressive communication have never looked better.",
+        Empathetic: "Thank you for joining me today. Meaningful communication starts with active listening, clear expression, and mutual understanding.",
+        Professional: "Welcome to today's executive overview. We maintain strict standards for visual stability, articulate delivery, and acoustic clarity.",
+        Excited: "This is remarkable! We have completely eliminated background jitter while preserving fluid speech and natural micro-blinking!",
+        Serious: "Attention to detail is imperative. Every phoneme and viseme transition is calculated with high mathematical precision.",
+      };
+      setScriptText(offlineScripts[currentEmotion] || offlineScripts.Neutral);
+      setShowPromptInput(false);
+      setTopicPrompt('');
     } catch (err) {
-      console.error('Failed to generate script:', err);
+      console.warn('Backend script generation unavailable, using offline template:', err);
+      setScriptText("Welcome to VividSync Studio! Experience high-fidelity photorealistic avatars with stationary framing and real-time lip sync.");
+      setShowPromptInput(false);
+      setTopicPrompt('');
     } finally {
       setIsGeneratingScript(false);
     }

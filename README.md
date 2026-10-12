@@ -34,11 +34,25 @@ npm run build
 npm start
 ```
 
-## Environment Variables
-Copy `.env.example` to `.env` and fill in your Gemini API key if utilizing generative scripts:
+## GitHub Pages Deployment
+
+To publish this repository to GitHub Pages:
+
+### Method 1: Automatic via GitHub Actions (Recommended)
+1. Push this repository to GitHub:
+   ```bash
+   git push -u origin main
+   ```
+2. In your GitHub repository (`aysharafik2023-a11y/photorealistic-Avtar-Teacher`):
+   - Go to **Settings** > **Pages**.
+   - Under **Build and deployment** > **Source**, select **GitHub Actions**.
+3. The included workflow (`.github/workflows/deploy.yml`) will automatically build and publish the site with relative assets.
+
+### Method 2: Command Line Deploy
 ```bash
-GEMINI_API_KEY=your_gemini_api_key
+npm run deploy
 ```
+This builds into `dist` and pushes directly to the `gh-pages` branch. In **Settings** > **Pages**, choose deploy from `gh-pages` branch.
 
 ## License
 MIT

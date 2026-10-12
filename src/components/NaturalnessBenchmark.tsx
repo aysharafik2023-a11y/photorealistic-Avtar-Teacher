@@ -110,10 +110,10 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
         }),
       });
 
-      const data = await res.json();
-
-      if (data.audioData) {
-        const binaryString = atob(data.audioData);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.audioData) {
+          const binaryString = atob(data.audioData);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) {
@@ -151,9 +151,10 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
           if (onDone) onDone();
         });
         activeSourceRef.current = source;
-      } else {
-        fallbackBrowserSpeech(onDone);
+        return;
       }
+    }
+    fallbackBrowserSpeech(onDone);
     } catch {
       fallbackBrowserSpeech(onDone);
     } finally {
