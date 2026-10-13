@@ -1,13 +1,22 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Suspense, lazy } from 'react';
 import { Header } from './components/Header';
 import { AvatarCanvas } from './components/AvatarCanvas';
 import { EmotionControls } from './components/EmotionControls';
 import { SpeechStudio } from './components/SpeechStudio';
-import { MicController } from './components/MicController';
-import { ChatAssistant } from './components/ChatAssistant';
 import { AvatarSelector } from './components/AvatarSelector';
-import { NaturalnessBenchmark } from './components/NaturalnessBenchmark';
 import { DEFAULT_AVATARS } from './data/defaultAvatars';
+
+// Lazy-load secondary tabs to cut initial bundle size in half and ensure fast first paint
+const MicController = lazy(() => import('./components/MicController').then(m => ({ default: m.MicController })));
+const ChatAssistant = lazy(() => import('./components/ChatAssistant').then(m => ({ default: m.ChatAssistant })));
+const NaturalnessBenchmark = lazy(() => import('./components/NaturalnessBenchmark').then(m => ({ default: m.NaturalnessBenchmark })));
+
+const TabLoader = () => (
+  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 flex flex-col items-center justify-center gap-2 text-neutral-400 text-xs">
+    <div className="w-5 h-5 border-2 border-neutral-700 border-t-emerald-500 rounded-full animate-spin" />
+    <span>Loading studio module...</span>
+  </div>
+);
 import { AvatarProfile } from './types/avatar';
 import { EmotionPresetKey, EmotionParameters, EMOTION_PRESETS, DEFAULT_CALIBRATION_PARAMS } from './types/emotion';
 import { AudioVisemeAnalyzer } from './utils/audioAnalyzer';
@@ -234,15 +243,17 @@ export default function App() {
             {/* Tab: Naturalness Benchmark & Stress Test */}
             {activeTab === 'benchmark' && (
               <div className="space-y-5">
-                <NaturalnessBenchmark
-                  avatar={selectedAvatar}
-                  emotionParams={emotionParams}
-                  onChangeArticulation={(val) => {
-                    setEmotionParams((prev) => ({ ...prev, articulationScale: val }));
-                  }}
-                  audioAnalyzer={audioAnalyzerRef.current}
-                  onSpeakingChange={setIsSpeaking}
-                />
+                <Suspense fallback={<TabLoader />}>
+                  <NaturalnessBenchmark
+                    avatar={selectedAvatar}
+                    emotionParams={emotionParams}
+                    onChangeArticulation={(val) => {
+                      setEmotionParams((prev) => ({ ...prev, articulationScale: val }));
+                    }}
+                    audioAnalyzer={audioAnalyzerRef.current}
+                    onSpeakingChange={setIsSpeaking}
+                  />
+                </Suspense>
 
                 <EmotionControls
                   currentPreset={currentEmotionKey}
@@ -277,10 +288,12 @@ export default function App() {
             {/* Tab 3: Live Microphone */}
             {activeTab === 'mic' && (
               <div className="space-y-5">
-                <MicController
-                  audioAnalyzer={audioAnalyzerRef.current}
-                  onMicStateChange={setIsSpeaking}
-                />
+                <Suspense fallback={<TabLoader />}>
+                  <MicController
+                    audioAnalyzer={audioAnalyzerRef.current}
+                    onMicStateChange={setIsSpeaking}
+                  />
+                </Suspense>
 
                 <EmotionControls
                   currentPreset={currentEmotionKey}
@@ -295,12 +308,14 @@ export default function App() {
             {/* Tab 4: Interactive Conversational Chat */}
             {activeTab === 'chat' && (
               <div className="space-y-5">
-                <ChatAssistant
-                  avatar={selectedAvatar}
-                  currentEmotion={currentEmotionKey}
-                  audioAnalyzer={audioAnalyzerRef.current}
-                  onSpeakingChange={setIsSpeaking}
-                />
+                <Suspense fallback={<TabLoader />}>
+                  <ChatAssistant
+                    avatar={selectedAvatar}
+                    currentEmotion={currentEmotionKey}
+                    audioAnalyzer={audioAnalyzerRef.current}
+                    onSpeakingChange={setIsSpeaking}
+                  />
+                </Suspense>
 
                 <EmotionControls
                   currentPreset={currentEmotionKey}
