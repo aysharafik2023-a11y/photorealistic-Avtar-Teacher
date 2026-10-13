@@ -28,7 +28,24 @@ function githubPagesHelperPlugin() {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
+  // In dev server mode, base must always be '/' for the dev server to route properly
+  if (command === 'serve') {
+    return {
+      base: '/',
+      plugins: [react(), tailwindcss()],
+      resolve: {
+        alias: {
+          '@': path.resolve(import.meta.dirname || '.', '.'),
+        },
+      },
+      server: {
+        hmr: process.env.DISABLE_HMR !== 'true',
+        watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      },
+    };
+  }
+
   // If running in GitHub Actions, GITHUB_REPOSITORY is "owner/photorealistic-Avtar-Teacher"
   const repo = process.env.GITHUB_REPOSITORY
     ? process.env.GITHUB_REPOSITORY.split('/')[1]

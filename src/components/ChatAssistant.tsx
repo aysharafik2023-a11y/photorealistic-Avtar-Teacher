@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, Sparkles, MessageSquare, Volume2 } from 'lucide-react';
 import { AvatarProfile } from '../types/avatar';
 import { EmotionPresetKey } from '../types/emotion';
@@ -42,9 +42,21 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
     },
   ]);
 
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      audioAnalyzer.stopSyntheticSpeech();
+    };
+  }, [audioAnalyzer]);
+
   const handleSendMessage = async (userText: string) => {
     const textToSend = userText.trim();
     if (!textToSend || isLoading) return;
+
+    await audioAnalyzer.resumeContext();
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -106,16 +118,34 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           audioAnalyzer.resetVisemes();
         });
       } else {
-        // Fallback Web Speech API
+        // Fallback Web Speech API with real-time synthetic viseme driver
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(replyText);
           utterance.pitch = avatar.gender === 'female' ? 1.1 : 0.95;
-          utterance.onstart = () => onSpeakingChange(true);
+
+          utterance.onboundary = (e) => {
+            if (e.name === 'word' && e.charIndex !== undefined) {
+              const word = replyText.slice(e.charIndex).split(/\s+/)[0];
+              audioAnalyzer.updateSpeechWord(word);
+            }
+          };
+
+          utterance.onstart = () => {
+            onSpeakingChange(true);
+            audioAnalyzer.startSyntheticSpeech(replyText);
+          };
+
           utterance.onend = () => {
             onSpeakingChange(false);
-            audioAnalyzer.resetVisemes();
+            audioAnalyzer.stopSyntheticSpeech();
           };
+
+          utterance.onerror = () => {
+            onSpeakingChange(false);
+            audioAnalyzer.stopSyntheticSpeech();
+          };
+
           window.speechSynthesis.speak(utterance);
         }
       }

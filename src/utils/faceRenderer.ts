@@ -11,10 +11,13 @@ export interface RenderState {
 }
 
 export class FaceRenderer {
-  private lastBlinkTime: number = 0;
-  private blinkDuration: number = 0.20; // seconds
-  private nextBlinkInterval: number = 3.5;
+  private lastBlinkTimestamp: number = 0;
+  private blinkDuration: number = 0.28; // seconds (~280ms natural human blink)
+  private nextBlinkInterval: number = 3.2; // seconds
+  private isBlinking: boolean = false;
+  private blinkTimer: number = 0;
   private blinkProgress: number = 0; // 0 (open) to 1 (closed)
+  private skinColorCache: Map<string, { r: number; g: number; b: number }> = new Map();
 
   // Offscreen canvases for photographic texture warping
   private offscreenCanvas: HTMLCanvasElement;
@@ -48,8 +51,8 @@ export class FaceRenderer {
 
     const { time, avatar, image, visemes, emotion, zoomLevel } = state;
 
-    // 1. Biological blink cycle
-    this.updateBlink(time, emotion.blinkRate);
+    // 1. Biological blink cycle (autonomous monotonic clock)
+    this.updateBlink(emotion.blinkRate);
 
     // 2. Locked stationary framing: The image and its background remain 100% completely stationary.
     // Zero canvas rotation, zero bobbing, zero breathing drift, and zero background movement while speaking.
@@ -167,32 +170,48 @@ export class FaceRenderer {
   }
 
   /**
-   * Updates natural human blink timing
+   * Updates natural human blink timing using an internal high-precision monotonic clock.
+   * Completely decoupled from React re-renders, prop changes, or caller timestamp resets.
    */
-  private updateBlink(time: number, blinkRateMultiplier: number): void {
-    if (this.lastBlinkTime === 0) {
-      this.lastBlinkTime = time;
+  private updateBlink(blinkRateMultiplier: number): void {
+    const now = performance.now() / 1000;
+    if (this.lastBlinkTimestamp === 0) {
+      this.lastBlinkTimestamp = now;
+      this.nextBlinkInterval = 2.4 + Math.random() * 2.0;
+      this.blinkProgress = 0;
+      return;
     }
 
-    const elapsedSinceLastBlink = time - this.lastBlinkTime;
-    const interval = this.nextBlinkInterval / Math.max(0.5, blinkRateMultiplier);
+    const dt = Math.max(0.001, Math.min(0.1, now - this.lastBlinkTimestamp));
+    this.lastBlinkTimestamp = now;
 
-    if (elapsedSinceLastBlink >= interval) {
-      const blinkTime = elapsedSinceLastBlink - interval;
-      if (blinkTime <= this.blinkDuration) {
-        const t = blinkTime / this.blinkDuration;
-        if (t < 0.45) {
-          this.blinkProgress = Math.sin((t / 0.45) * (Math.PI / 2));
-        } else {
-          this.blinkProgress = Math.cos(((t - 0.45) / 0.55) * (Math.PI / 2));
-        }
-      } else {
-        this.blinkProgress = 0;
-        this.lastBlinkTime = time;
-        this.nextBlinkInterval = 3.0 + Math.random() * 3.0;
+    const rate = Math.max(0.3, blinkRateMultiplier || 1.0);
+    const effectiveInterval = this.nextBlinkInterval / rate;
+
+    if (!this.isBlinking) {
+      this.blinkTimer += dt;
+      if (this.blinkTimer >= effectiveInterval) {
+        this.isBlinking = true;
+        this.blinkTimer = 0;
       }
-    } else {
       this.blinkProgress = 0;
+    } else {
+      this.blinkTimer += dt;
+      if (this.blinkTimer >= this.blinkDuration) {
+        this.isBlinking = false;
+        this.blinkTimer = 0;
+        this.blinkProgress = 0;
+        this.nextBlinkInterval = 2.6 + Math.random() * 2.4;
+      } else {
+        const t = this.blinkTimer / this.blinkDuration;
+        // Asymmetric biological eyelid kinematics:
+        // Rapid 35% descent phase, smoother 65% ascent phase
+        if (t < 0.35) {
+          this.blinkProgress = Math.sin((t / 0.35) * (Math.PI / 2));
+        } else {
+          this.blinkProgress = Math.cos(((t - 0.35) / 0.65) * (Math.PI / 2));
+        }
+      }
     }
   }
 
@@ -211,8 +230,7 @@ export class FaceRenderer {
 
   /**
    * Sample the exact photographic skin tone between the eye and eyebrow.
-   * Ensures that when the eye blinks or squints, the eyelid skin tone is 100%
-   * identical to the avatar's real eyebrow and facial skin color.
+   * Cached per avatar profile for zero GPU stalls and 100% color consistency.
    */
   private sampleInfrabrowSkinColor(
     image: HTMLImageElement,
@@ -222,36 +240,44 @@ export class FaceRenderer {
     drawH: number,
     eye: { x: number; y: number },
     brow: { x: number; y: number },
+    avatarId: string,
     defaultHex: string
   ): { r: number; g: number; b: number } {
+    if (this.skinColorCache.has(avatarId)) {
+      return this.skinColorCache.get(avatarId)!;
+    }
     const baseRgb = this.parseHexColor(defaultHex);
+    let resolved = baseRgb;
     try {
-      if (!this.offscreenCtx || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
-        return baseRgb;
-      }
-      const normX = Math.max(0, Math.min(1, (eye.x - drawX) / drawW));
-      const sampleCanvasY = brow.y + (eye.y - brow.y) * 0.45;
-      const normY = Math.max(0, Math.min(1, (sampleCanvasY - drawY) / drawH));
+      if (this.offscreenCtx && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        const normX = Math.max(0, Math.min(1, (eye.x - drawX) / drawW));
+        const sampleCanvasY = brow.y + (eye.y - brow.y) * 0.45;
+        const normY = Math.max(0, Math.min(1, (sampleCanvasY - drawY) / drawH));
 
-      const sx = Math.floor(normX * image.naturalWidth);
-      const sy = Math.floor(normY * image.naturalHeight);
+        const sx = Math.floor(normX * image.naturalWidth);
+        const sy = Math.floor(normY * image.naturalHeight);
 
-      if (sx >= 0 && sx < image.naturalWidth && sy >= 0 && sy < image.naturalHeight) {
-        this.offscreenCtx.clearRect(0, 0, 1, 1);
-        this.offscreenCtx.drawImage(image, sx, sy, 1, 1, 0, 0, 1, 1);
-        const data = this.offscreenCtx.getImageData(0, 0, 1, 1).data;
-        if (data[3] > 100) {
-          const lum = 0.299 * data[0] + 0.587 * data[1] + 0.114 * data[2];
-          const baseLum = 0.299 * baseRgb.r + 0.587 * baseRgb.g + 0.114 * baseRgb.b;
-          if (lum > baseLum * 0.6) {
-            return { r: data[0], g: data[1], b: data[2] };
+        if (sx >= 0 && sx < image.naturalWidth && sy >= 0 && sy < image.naturalHeight) {
+          this.offscreenCtx.save();
+          this.offscreenCtx.globalCompositeOperation = 'source-over';
+          this.offscreenCtx.clearRect(0, 0, 1, 1);
+          this.offscreenCtx.drawImage(image, sx, sy, 1, 1, 0, 0, 1, 1);
+          const data = this.offscreenCtx.getImageData(0, 0, 1, 1).data;
+          this.offscreenCtx.restore();
+          if (data[3] > 100) {
+            const lum = 0.299 * data[0] + 0.587 * data[1] + 0.114 * data[2];
+            const baseLum = 0.299 * baseRgb.r + 0.587 * baseRgb.g + 0.114 * baseRgb.b;
+            if (lum > baseLum * 0.6) {
+              resolved = { r: data[0], g: data[1], b: data[2] };
+            }
           }
         }
       }
     } catch {
       // Gracefully fall back to avatar skin hue
     }
-    return baseRgb;
+    this.skinColorCache.set(avatarId, resolved);
+    return resolved;
   }
 
   /**
@@ -293,7 +319,7 @@ export class FaceRenderer {
 
     const renderEye = (eye: { x: number; y: number }, brow: { x: number; y: number }, isLeftEye: boolean) => {
       // Sample exact photographic skin color matching the eyebrow and infrabrow area
-      const skin = this.sampleInfrabrowSkinColor(image, drawX, drawY, drawW, drawH, eye, brow, avatar.skinHue);
+      const skin = this.sampleInfrabrowSkinColor(image, drawX, drawY, drawW, drawH, eye, brow, avatar.id, avatar.skinHue);
       const skinRgb = `${skin.r}, ${skin.g}, ${skin.b}`;
 
       // Canthi positions

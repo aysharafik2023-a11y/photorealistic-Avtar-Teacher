@@ -65,6 +65,11 @@ export const SpeechStudio: React.FC<SpeechStudioProps> = ({
   }, []);
 
   const stopPlayback = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    audioAnalyzer.stopSyntheticSpeech();
+
     if (activeSourceRef.current) {
       try {
         activeSourceRef.current.stop();
@@ -135,6 +140,7 @@ export const SpeechStudio: React.FC<SpeechStudioProps> = ({
 
     if (!scriptText.trim()) return;
 
+    await audioAnalyzer.resumeContext();
     setIsSynthesizing(true);
     try {
       const emotionDesc = EMOTION_PRESETS[currentEmotion]?.promptDescription || 'Natural tone';
@@ -149,43 +155,45 @@ export const SpeechStudio: React.FC<SpeechStudioProps> = ({
         }),
       });
 
-      const data = await res.json();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.audioData) {
+          // Decode base64 WAV returned by Gemini TTS
+          const binaryString = atob(data.audioData);
+          const len = binaryString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
 
-      if (data.audioData) {
-        // Decode base64 WAV returned by Gemini TTS
-        const binaryString = atob(data.audioData);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+          const audioCtx = audioAnalyzer.getContext() || new (window.AudioContext || (window as any).webkitAudioContext)();
+          const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+
+          setIsSynthesizing(false);
+          setIsPlaying(true);
+          onSpeakingChange(true);
+
+          const source = audioAnalyzer.playAudioBuffer(audioBuffer, () => {
+            setIsPlaying(false);
+            onSpeakingChange(false);
+            audioAnalyzer.resetVisemes();
+          });
+          activeSourceRef.current = source;
+          return;
         }
-
-        const audioCtx = audioAnalyzer.getContext() || new (window.AudioContext || (window as any).webkitAudioContext)();
-        const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
-
-        setIsSynthesizing(false);
-        setIsPlaying(true);
-        onSpeakingChange(true);
-
-        const source = audioAnalyzer.playAudioBuffer(audioBuffer, () => {
-          setIsPlaying(false);
-          onSpeakingChange(false);
-          audioAnalyzer.resetVisemes();
-        });
-        activeSourceRef.current = source;
-      } else {
-        // Fallback: Web Speech API synthesis
-        fallbackBrowserSpeech();
       }
+
+      // If backend TTS is unavailable (e.g. GitHub Pages static deployment), use browser speech
+      fallbackBrowserSpeech();
     } catch (err) {
-      console.warn('Backend TTS failed, using browser speech synthesis:', err);
+      console.warn('Backend TTS unavailable on static host, using browser speech synthesis:', err);
       fallbackBrowserSpeech();
     } finally {
       setIsSynthesizing(false);
     }
   };
 
-  // Browser Web Speech fallback with simulated mouth articulation
+  // Browser Web Speech fallback with natural synchronized mouth articulation
   const fallbackBrowserSpeech = () => {
     if (!('speechSynthesis' in window)) {
       alert('Speech synthesis is not supported on this browser.');
@@ -198,35 +206,44 @@ export const SpeechStudio: React.FC<SpeechStudioProps> = ({
     utterance.rate = 1.0;
     utterance.pitch = avatar.gender === 'female' ? 1.15 : 0.95;
 
-    // Simulate viseme driver during speech
-    let simInterval: any = null;
+    // Track spoken words to guide phonetic mouth shapes
+    utterance.onboundary = (e) => {
+      if (e.name === 'word' && e.charIndex !== undefined) {
+        const word = scriptText.slice(e.charIndex).split(/\s+/)[0];
+        audioAnalyzer.updateSpeechWord(word);
+      }
+    };
+
     utterance.onstart = () => {
       setIsPlaying(true);
       onSpeakingChange(true);
-      simInterval = setInterval(() => {
-        // Random mouth phonetic impulses
-        const simRms = 0.2 + Math.random() * 0.4;
-        audioAnalyzer.sensitivity = 1.5;
-      }, 50);
+      // Drive biological phonetic visemes in real-time
+      audioAnalyzer.startSyntheticSpeech(scriptText);
     };
 
     utterance.onend = () => {
-      clearInterval(simInterval);
       setIsPlaying(false);
       onSpeakingChange(false);
-      audioAnalyzer.resetVisemes();
+      audioAnalyzer.stopSyntheticSpeech();
+    };
+
+    utterance.onerror = () => {
+      setIsPlaying(false);
+      onSpeakingChange(false);
+      audioAnalyzer.stopSyntheticSpeech();
     };
 
     window.speechSynthesis.speak(utterance);
   };
 
   // Upload custom audio file (MP3 / WAV)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadFileName(file.name);
     stopPlayback();
+    await audioAnalyzer.resumeContext();
 
     const url = URL.createObjectURL(file);
     if (!audioElementRef.current) {

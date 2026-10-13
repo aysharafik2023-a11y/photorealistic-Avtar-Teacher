@@ -234,14 +234,12 @@ Do not include brackets, emotes, or speaker tags. Output ONLY the words to be sp
   }
 });
 
+// Dev server must always bind to port 3000 per AI Studio runtime constraints
+const isDev = process.env.NODE_ENV !== 'production';
 let port = 3000;
 let host = '0.0.0.0';
 
-if (process.env.PORT) {
-  port = parseInt(process.env.PORT, 10);
-}
-
-// Parse CLI flags such as --port 3000 --host 0.0.0.0
+// Parse explicit CLI flags such as --port 3000 --host 0.0.0.0
 for (let i = 2; i < process.argv.length; i++) {
   if (process.argv[i] === '--port' && process.argv[i + 1]) {
     port = parseInt(process.argv[i + 1], 10);
@@ -251,7 +249,12 @@ for (let i = 2; i < process.argv.length; i++) {
   }
 }
 
-const PORT = port;
+// In production only, respect process.env.PORT if specified (and not conflicting container port)
+if (!isDev && process.env.PORT && process.env.PORT !== '8080') {
+  port = parseInt(process.env.PORT, 10);
+}
+
+const PORT = 3000;
 const HOST = host;
 
 // Vite middleware in dev or static files in production

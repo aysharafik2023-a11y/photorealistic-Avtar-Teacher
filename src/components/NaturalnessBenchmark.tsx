@@ -83,6 +83,10 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
       } catch {}
       activeSourceRef.current = null;
     }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    audioAnalyzer.stopSyntheticSpeech();
     audioAnalyzer.disconnect();
     setIsPlaying(false);
     setIsTourMode(false);
@@ -97,6 +101,7 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
   // Play test audio through Gemini TTS or fallback
   const playTestSpeech = async (onDone?: () => void) => {
     stopAudio();
+    await audioAnalyzer.resumeContext();
     setIsSynthesizing(true);
 
     try {
@@ -114,47 +119,47 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
         const data = await res.json();
         if (data.audioData) {
           const binaryString = atob(data.audioData);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const audioCtx = audioAnalyzer.getContext() || new (window.AudioContext || (window as any).webkitAudioContext)();
-        const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
-
-        setIsSynthesizing(false);
-        setIsPlaying(true);
-        onSpeakingChange(true);
-
-        // Word timeline tracker
-        const durationSec = audioBuffer.duration;
-        const wordCount = TEST_PHRASE.phoneticBreakdown.length;
-        const msPerWord = (durationSec * 1000) / wordCount;
-
-        let wIdx = 0;
-        const wordTimer = setInterval(() => {
-          if (wIdx < wordCount) {
-            setActiveWordIndex(wIdx);
-            wIdx++;
-          } else {
-            clearInterval(wordTimer);
+          const len = binaryString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
           }
-        }, msPerWord);
 
-        const source = audioAnalyzer.playAudioBuffer(audioBuffer, () => {
-          clearInterval(wordTimer);
-          setIsPlaying(false);
-          setActiveWordIndex(-1);
-          onSpeakingChange(false);
-          audioAnalyzer.resetVisemes();
-          if (onDone) onDone();
-        });
-        activeSourceRef.current = source;
-        return;
+          const audioCtx = audioAnalyzer.getContext() || new (window.AudioContext || (window as any).webkitAudioContext)();
+          const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+
+          setIsSynthesizing(false);
+          setIsPlaying(true);
+          onSpeakingChange(true);
+
+          // Word timeline tracker
+          const durationSec = audioBuffer.duration;
+          const wordCount = TEST_PHRASE.phoneticBreakdown.length;
+          const msPerWord = (durationSec * 1000) / wordCount;
+
+          let wIdx = 0;
+          const wordTimer = setInterval(() => {
+            if (wIdx < wordCount) {
+              setActiveWordIndex(wIdx);
+              wIdx++;
+            } else {
+              clearInterval(wordTimer);
+            }
+          }, msPerWord);
+
+          const source = audioAnalyzer.playAudioBuffer(audioBuffer, () => {
+            clearInterval(wordTimer);
+            setIsPlaying(false);
+            setActiveWordIndex(-1);
+            onSpeakingChange(false);
+            audioAnalyzer.resetVisemes();
+            if (onDone) onDone();
+          });
+          activeSourceRef.current = source;
+          return;
+        }
       }
-    }
-    fallbackBrowserSpeech(onDone);
+      fallbackBrowserSpeech(onDone);
     } catch {
       fallbackBrowserSpeech(onDone);
     } finally {
@@ -165,6 +170,7 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
   const fallbackBrowserSpeech = (onDone?: () => void) => {
     if (!('speechSynthesis' in window)) {
       alert('Speech synthesis unavailable');
+      if (onDone) onDone();
       return;
     }
     window.speechSynthesis.cancel();
@@ -172,15 +178,38 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
     utterance.rate = 0.95;
     utterance.pitch = avatar.gender === 'female' ? 1.1 : 0.95;
 
+    // Track word highlights & visemes
+    utterance.onboundary = (e) => {
+      if (e.name === 'word' && e.charIndex !== undefined) {
+        const word = TEST_PHRASE.text.slice(e.charIndex).split(/\s+/)[0];
+        audioAnalyzer.updateSpeechWord(word);
+        const cleanWord = word.replace(/[^a-z]/gi, '').toLowerCase();
+        const idx = TEST_PHRASE.phoneticBreakdown.findIndex(
+          (b) => b.word.toLowerCase() === cleanWord
+        );
+        if (idx !== -1) setActiveWordIndex(idx);
+      }
+    };
+
     utterance.onstart = () => {
       setIsPlaying(true);
       onSpeakingChange(true);
+      audioAnalyzer.startSyntheticSpeech(TEST_PHRASE.text);
     };
 
     utterance.onend = () => {
       setIsPlaying(false);
+      setActiveWordIndex(-1);
       onSpeakingChange(false);
-      audioAnalyzer.resetVisemes();
+      audioAnalyzer.stopSyntheticSpeech();
+      if (onDone) onDone();
+    };
+
+    utterance.onerror = () => {
+      setIsPlaying(false);
+      setActiveWordIndex(-1);
+      onSpeakingChange(false);
+      audioAnalyzer.stopSyntheticSpeech();
       if (onDone) onDone();
     };
 

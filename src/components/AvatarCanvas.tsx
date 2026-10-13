@@ -30,22 +30,12 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
 
   const [zoomLevel, setZoomLevel] = useState<'portrait' | 'closeup' | 'wide'>('portrait');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [currentVisemes, setCurrentVisemes] = useState<VisemeState>({
-    jawOpen: 0,
-    mouthSpread: 0,
-    lipPucker: 0,
-    lipPress: 0,
-    teethExposure: 0,
-    tongueRaise: 0,
-    lowerLipTuck: 0,
-    audioEnergy: 0,
-  });
 
   const rendererRef = useRef<FaceRenderer>(new FaceRenderer());
   const avatarImageRef = useRef<HTMLImageElement | null>(null);
   const [isImageLoaded, setIsImageLoaded] = useState<boolean>(false);
 
-  // Load avatar image
+  // Load avatar image with immediate cache check
   useEffect(() => {
     setIsImageLoaded(false);
     const img = new Image();
@@ -53,7 +43,6 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
       img.crossOrigin = 'anonymous';
       img.referrerPolicy = 'no-referrer';
     }
-    img.src = avatar.imageSrc;
     img.onload = () => {
       avatarImageRef.current = img;
       setIsImageLoaded(true);
@@ -63,9 +52,14 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
       avatarImageRef.current = null;
       setIsImageLoaded(false);
     };
+    img.src = avatar.imageSrc;
+    if (img.complete && img.naturalWidth > 0) {
+      avatarImageRef.current = img;
+      setIsImageLoaded(true);
+    }
   }, [avatar.imageSrc]);
 
-  // Animation frame loop
+  // High-performance 60 FPS animation frame loop
   useEffect(() => {
     let animationId: number;
     let startTime = performance.now();
@@ -77,9 +71,8 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
       if (canvas) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          // Get current visemes from analyzer
+          // Get current visemes from analyzer without triggering React re-renders
           const visemes = audioAnalyzer.getCurrentVisemes(emotionParams.articulationScale);
-          setCurrentVisemes(visemes);
 
           rendererRef.current.render(ctx, canvas.width, canvas.height, {
             time: elapsed,

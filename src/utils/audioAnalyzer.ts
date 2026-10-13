@@ -8,6 +8,14 @@ export class AudioVisemeAnalyzer {
   private timeData: Uint8Array<ArrayBuffer> | null = null;
   private isRunning: boolean = false;
 
+  // Synthetic speech viseme driver for browser speech synthesis & offline/static hosting
+  private isSyntheticSpeechActive: boolean = false;
+  private syntheticText: string = '';
+  private syntheticTime: number = 0;
+  private currentPhonemeBias: VisemeState['phonemeCategory'] | null = null;
+  private currentPhonemeTimer: number = 0;
+  private lastVisemeComputeTime: number = 0;
+
   // Smoothed internal values for lifelike physics
   private smoothedJaw: number = 0;
   private smoothedSpread: number = 0;
@@ -28,13 +36,21 @@ export class AudioVisemeAnalyzer {
     return this.audioCtx;
   }
 
+  public async resumeContext(): Promise<void> {
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      try {
+        await this.audioCtx.resume();
+      } catch {}
+    }
+  }
+
   private initContextIfNeeded() {
     if (!this.audioCtx) {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       this.audioCtx = new AudioCtx();
     }
     if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
+      this.audioCtx.resume().catch(() => {});
     }
     if (!this.analyser) {
       this.analyser = this.audioCtx.createAnalyser();
@@ -109,6 +125,7 @@ export class AudioVisemeAnalyzer {
       } catch {}
       this.sourceNode = null;
     }
+    this.isSyntheticSpeechActive = false;
     this.isRunning = false;
     this.resetVisemes();
   }
@@ -122,12 +139,167 @@ export class AudioVisemeAnalyzer {
     this.smoothedTongue = 0;
     this.smoothedTuck = 0;
     this.smoothedEnergy = 0;
+    this.currentPhonemeBias = null;
+    this.currentPhonemeTimer = 0;
+  }
+
+  /**
+   * Activates biological phonetic articulatory driver for browser speech synthesis & offline/static hosting
+   */
+  public startSyntheticSpeech(text?: string): void {
+    this.isRunning = true;
+    this.isSyntheticSpeechActive = true;
+    this.syntheticText = text || '';
+    this.syntheticTime = 0;
+    this.currentPhonemeBias = null;
+    this.currentPhonemeTimer = 0;
+    this.lastVisemeComputeTime = performance.now() / 1000;
+  }
+
+  public stopSyntheticSpeech(): void {
+    this.isSyntheticSpeechActive = false;
+    this.isRunning = false;
+    this.resetVisemes();
+  }
+
+  public updateSpeechWord(word: string): void {
+    if (!word) return;
+    const lower = word.toLowerCase().trim();
+    if (/^[pmb]/.test(lower) || /[pmb]$/.test(lower)) {
+      this.currentPhonemeBias = 'bilabial';
+      this.currentPhonemeTimer = 0.12;
+    } else if (/[fv]/.test(lower)) {
+      this.currentPhonemeBias = 'labiodental';
+      this.currentPhonemeTimer = 0.15;
+    } else if (/(oo|ou|ow|u|o)/.test(lower)) {
+      this.currentPhonemeBias = 'rounded';
+      this.currentPhonemeTimer = 0.20;
+    } else if (/(ee|ea|ey|i|ae)/.test(lower)) {
+      this.currentPhonemeBias = 'wide_vowel';
+      this.currentPhonemeTimer = 0.20;
+    } else if (/(th|t|d|n|l|s)/.test(lower)) {
+      this.currentPhonemeBias = 'alveolar';
+      this.currentPhonemeTimer = 0.18;
+    } else {
+      this.currentPhonemeBias = 'open_vowel';
+      this.currentPhonemeTimer = 0.22;
+    }
   }
 
   /**
    * Called every animation frame (60 FPS) to compute the current phonetic visemes
    */
   public getCurrentVisemes(articulationScale: number = 1.0): VisemeState {
+    const now = performance.now() / 1000;
+    const dt = this.lastVisemeComputeTime > 0 ? Math.max(0.005, Math.min(0.06, now - this.lastVisemeComputeTime)) : 0.016;
+    this.lastVisemeComputeTime = now;
+
+    // Handle synthetic speech synthesis driver (e.g. browser Web Speech API / static hosting)
+    if (this.isSyntheticSpeechActive) {
+      this.syntheticTime += dt;
+      if (this.currentPhonemeTimer > 0) {
+        this.currentPhonemeTimer -= dt;
+      }
+
+      // Natural speech rhythm: ~3.8 syllables per second
+      const syllRate = 3.8;
+      const cycle = this.syntheticTime * syllRate;
+      const cycleFraction = cycle % 1.0;
+      const openCurve = Math.sin(cycleFraction * Math.PI);
+      const stress = 0.70 + 0.30 * Math.sin(cycle * 0.45);
+
+      const syllIdx = Math.floor(cycle);
+      const pattern = syllIdx % 5;
+
+      let targetJaw = 0;
+      let targetSpread = 0;
+      let targetPucker = 0;
+      let targetTeeth = 0;
+      let targetLipPress = 0;
+      let targetTongue = 0;
+      let targetTuck = 0;
+      let phonemeCategory: VisemeState['phonemeCategory'] = 'open_vowel';
+      let activePhonemeLabel = 'Vowel';
+
+      const bias = this.currentPhonemeTimer > 0 ? this.currentPhonemeBias : null;
+
+      if (bias === 'bilabial' || (pattern === 0 && cycleFraction < 0.26)) {
+        targetLipPress = 0.90;
+        targetJaw = 0.0;
+        phonemeCategory = 'bilabial';
+        activePhonemeLabel = 'Bilabial /p, b, m/';
+      } else if (bias === 'labiodental' || (pattern === 3 && cycleFraction < 0.28)) {
+        targetTuck = 0.50;
+        targetJaw = 0.16;
+        targetTeeth = 0.35;
+        phonemeCategory = 'labiodental';
+        activePhonemeLabel = 'Labiodental /f, v/';
+      } else if (bias === 'rounded' || pattern === 2) {
+        targetPucker = 0.65 * openCurve;
+        targetJaw = (0.35 + 0.25 * stress) * openCurve;
+        targetSpread = -0.35;
+        phonemeCategory = 'rounded';
+        activePhonemeLabel = 'Rounded /u, o/';
+      } else if (bias === 'wide_vowel' || pattern === 4) {
+        targetSpread = 0.50 * openCurve;
+        targetTeeth = 0.40 * openCurve;
+        targetJaw = (0.30 + 0.20 * stress) * openCurve;
+        phonemeCategory = 'wide_vowel';
+        activePhonemeLabel = 'Front Vowel /i, e/';
+      } else if (bias === 'alveolar') {
+        targetTongue = 0.60 * openCurve;
+        targetJaw = 0.25 * openCurve;
+        targetTeeth = 0.30;
+        phonemeCategory = 'alveolar';
+        activePhonemeLabel = 'Alveolar /t, d, n/';
+      } else {
+        targetJaw = (0.50 + 0.30 * stress) * openCurve;
+        targetSpread = 0.05;
+        targetTeeth = 0.25 * openCurve;
+        phonemeCategory = 'open_vowel';
+        activePhonemeLabel = 'Open Vowel /a, ɑ/';
+      }
+
+      // Smooth kinematics
+      const attack = targetLipPress > 0.5 ? 0.75 : 0.50;
+      const decay = 0.35;
+      const maxVelocity = 0.14;
+
+      const rawDeltaJaw = (targetJaw - this.smoothedJaw) * (targetJaw > this.smoothedJaw ? attack : decay);
+      const clampedDeltaJaw = Math.max(-maxVelocity, Math.min(maxVelocity, rawDeltaJaw));
+      this.smoothedJaw += clampedDeltaJaw;
+
+      this.smoothedSpread += (targetSpread - this.smoothedSpread) * 0.35;
+      this.smoothedPucker += (targetPucker - this.smoothedPucker) * 0.35;
+      this.smoothedTeeth += (targetTeeth - this.smoothedTeeth) * 0.40;
+      this.smoothedLipPress += (targetLipPress - this.smoothedLipPress) * 0.60;
+      this.smoothedTongue += (targetTongue - this.smoothedTongue) * 0.35;
+      this.smoothedTuck += (targetTuck - this.smoothedTuck) * 0.35;
+      this.smoothedEnergy = Math.max(0.15, this.smoothedJaw * 0.7);
+
+      if (this.smoothedLipPress > 0.35) {
+        this.smoothedJaw = Math.max(0, this.smoothedJaw * (1.0 - this.smoothedLipPress));
+      }
+
+      if (this.smoothedJaw < 0.01) this.smoothedJaw = 0;
+
+      const apertureMm = Math.round(this.smoothedJaw * 10 * 10) / 10;
+
+      return {
+        jawOpen: Math.max(0, Math.min(1, this.smoothedJaw)),
+        mouthSpread: Math.max(-1, Math.min(1, this.smoothedSpread)),
+        lipPucker: Math.max(0, Math.min(1, this.smoothedPucker)),
+        lipPress: Math.max(0, Math.min(1, this.smoothedLipPress)),
+        teethExposure: Math.max(0, Math.min(1, this.smoothedTeeth)),
+        tongueRaise: Math.max(0, Math.min(1, this.smoothedTongue)),
+        lowerLipTuck: Math.max(0, Math.min(1, this.smoothedTuck)),
+        audioEnergy: Math.max(0, Math.min(1, this.smoothedEnergy)),
+        phonemeCategory,
+        activePhonemeLabel,
+        apertureMm,
+      };
+    }
+
     if (!this.analyser || !this.freqData || !this.timeData || !this.isRunning) {
       // Natural decay to resting pose
       this.smoothedJaw *= 0.85;

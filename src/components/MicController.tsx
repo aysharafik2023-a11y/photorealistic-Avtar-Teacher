@@ -43,6 +43,7 @@ export const MicController: React.FC<MicControllerProps> = ({
       });
 
       setMicStream(stream);
+      await audioAnalyzer.resumeContext();
       await audioAnalyzer.connectMicrophone(stream);
       setIsMicActive(true);
       onMicStateChange(true);
