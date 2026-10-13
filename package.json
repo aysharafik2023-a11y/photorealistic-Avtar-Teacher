@@ -3,11 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "homepage": "https://aysharafik2023-a11y.github.io/photorealistic-Avtar-Teacher",
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.ts",
     "build": "vite build",
-    "predeploy": "npm run build",
+    "predeploy": "GH_PAGES=true npm run build",
     "deploy": "gh-pages -d dist",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
