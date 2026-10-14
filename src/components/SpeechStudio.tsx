@@ -196,7 +196,7 @@ export const SpeechStudio: React.FC<SpeechStudioProps> = ({
   // Browser Web Speech fallback with natural synchronized mouth articulation
   const fallbackBrowserSpeech = () => {
     if (!('speechSynthesis' in window)) {
-      alert('Speech synthesis is not supported on this browser.');
+      console.warn('[VividSync Speech] Speech synthesis is not supported on this browser.');
       setIsSynthesizing(false);
       return;
     }

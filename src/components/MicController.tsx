@@ -16,6 +16,7 @@ export const MicController: React.FC<MicControllerProps> = ({
   const [sensitivity, setSensitivity] = useState<number>(1.3);
   const [noiseGate, setNoiseGate] = useState<number>(0.02);
   const [currentDb, setCurrentDb] = useState<number>(0);
+  const [micError, setMicError] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -33,7 +34,11 @@ export const MicController: React.FC<MicControllerProps> = ({
   }, []);
 
   const startMicrophone = async () => {
+    setMicError(null);
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Microphone media devices API is not supported in this browser environment.');
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -49,8 +54,8 @@ export const MicController: React.FC<MicControllerProps> = ({
       onMicStateChange(true);
       startVisualizer();
     } catch (err: any) {
-      console.error('Microphone access denied or failed:', err);
-      alert('Unable to access microphone. Please grant permission in your browser.');
+      console.warn('[VividSync Mic] Microphone access denied or unavailable:', err?.message || err);
+      setMicError(err?.message || 'Unable to access microphone. Please allow microphone permission in your browser.');
     }
   };
 
@@ -161,6 +166,18 @@ export const MicController: React.FC<MicControllerProps> = ({
           )}
         </button>
       </div>
+
+      {micError && (
+        <div className="p-3 bg-red-950/40 border border-red-900/60 rounded-lg flex items-center justify-between gap-3 text-xs text-red-200">
+          <span>{micError}</span>
+          <button
+            onClick={() => setMicError(null)}
+            className="text-[11px] text-red-300 hover:text-white underline cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Live Waveform Canvas */}
       <div className="relative rounded-lg overflow-hidden border border-neutral-800 bg-neutral-950">

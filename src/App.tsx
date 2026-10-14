@@ -21,6 +21,8 @@ import { AvatarProfile } from './types/avatar';
 import { EmotionPresetKey, EmotionParameters, EMOTION_PRESETS, DEFAULT_CALIBRATION_PARAMS } from './types/emotion';
 import { AudioVisemeAnalyzer } from './utils/audioAnalyzer';
 import { AvatarVideoRecorder } from './utils/recorder';
+import { startupManager, StartupState } from './utils/startupService';
+import { StartupBanner } from './components/StartupBanner';
 import { Sliders, Volume2, Mic, MessageSquare, Zap, Activity, Waves, Layers, ShieldCheck } from 'lucide-react';
 
 export default function App() {
@@ -32,6 +34,17 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState<'studio' | 'benchmark' | 'tts' | 'mic' | 'chat'>('studio');
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+
+  // Non-blocking real-time startup management
+  const [startupState, setStartupState] = useState<StartupState>(() => startupManager.getState());
+
+  useEffect(() => {
+    const unsubscribe = startupManager.subscribe(setStartupState);
+    startupManager.initialize();
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Audio and recording utilities
   const audioAnalyzerRef = useRef<AudioVisemeAnalyzer>(new AudioVisemeAnalyzer());
@@ -112,6 +125,14 @@ export default function App() {
         onStartRecording={handleStartRecording}
         onStopRecording={handleStopRecording}
         recordingSeconds={recordingSeconds}
+        startupState={startupState}
+        onRetryConnection={() => startupManager.retry()}
+      />
+
+      {/* Startup status & real-time connection alert banner */}
+      <StartupBanner
+        startupState={startupState}
+        onRetry={() => startupManager.retry()}
       />
 
       {/* Main Content Area */}

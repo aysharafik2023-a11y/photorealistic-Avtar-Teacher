@@ -169,7 +169,7 @@ export const NaturalnessBenchmark: React.FC<NaturalnessBenchmarkProps> = ({
 
   const fallbackBrowserSpeech = (onDone?: () => void) => {
     if (!('speechSynthesis' in window)) {
-      alert('Speech synthesis unavailable');
+      console.warn('[VividSync Benchmark] Speech synthesis unavailable on this browser.');
       if (onDone) onDone();
       return;
     }
