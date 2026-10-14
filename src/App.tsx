@@ -5,6 +5,13 @@ import { EmotionControls } from './components/EmotionControls';
 import { SpeechStudio } from './components/SpeechStudio';
 import { AvatarSelector } from './components/AvatarSelector';
 import { DEFAULT_AVATARS } from './data/defaultAvatars';
+import { AvatarProfile } from './types/avatar';
+import { EmotionPresetKey, EmotionParameters, EMOTION_PRESETS, DEFAULT_CALIBRATION_PARAMS } from './types/emotion';
+import { AudioVisemeAnalyzer } from './utils/audioAnalyzer';
+import { AvatarVideoRecorder } from './utils/recorder';
+import { startupManager, StartupState } from './utils/startupService';
+import { StartupBanner } from './components/StartupBanner';
+import { Sliders, Volume2, Mic, MessageSquare, Zap, Activity, Waves, Layers, ShieldCheck } from 'lucide-react';
 
 // Lazy-load secondary tabs to cut initial bundle size in half and ensure fast first paint
 const MicController = lazy(() => import('./components/MicController').then(m => ({ default: m.MicController })));
@@ -17,13 +24,6 @@ const TabLoader = () => (
     <span>Loading studio module...</span>
   </div>
 );
-import { AvatarProfile } from './types/avatar';
-import { EmotionPresetKey, EmotionParameters, EMOTION_PRESETS, DEFAULT_CALIBRATION_PARAMS } from './types/emotion';
-import { AudioVisemeAnalyzer } from './utils/audioAnalyzer';
-import { AvatarVideoRecorder } from './utils/recorder';
-import { startupManager, StartupState } from './utils/startupService';
-import { StartupBanner } from './components/StartupBanner';
-import { Sliders, Volume2, Mic, MessageSquare, Zap, Activity, Waves, Layers, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const [avatarsList, setAvatarsList] = useState<AvatarProfile[]>(DEFAULT_AVATARS);

@@ -74,14 +74,18 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
           // Get current visemes from analyzer without triggering React re-renders
           const visemes = audioAnalyzer.getCurrentVisemes(emotionParams.articulationScale);
 
-          rendererRef.current.render(ctx, canvas.width, canvas.height, {
-            time: elapsed,
-            avatar,
-            image: avatarImageRef.current,
-            visemes,
-            emotion: emotionParams,
-            zoomLevel,
-          });
+          try {
+            rendererRef.current.render(ctx, canvas.width, canvas.height, {
+              time: elapsed,
+              avatar,
+              image: avatarImageRef.current,
+              visemes,
+              emotion: emotionParams,
+              zoomLevel,
+            });
+          } catch (renderErr) {
+            console.warn('[AvatarCanvas] Frame render notice:', renderErr);
+          }
         }
       }
 

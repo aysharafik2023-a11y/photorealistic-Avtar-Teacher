@@ -14,7 +14,45 @@
         } catch (_) {}
       })();
 
-      // 2. Suppress Vite HMR / WebSocket client connection errors per environment constraints (HMR: Disabled)
+      // 2. Safe development-client WebSocket handler for AI Studio iframe preview environment (HMR: Disabled)
+      (function() {
+        try {
+          var NativeWebSocket = window.WebSocket;
+          if (NativeWebSocket) {
+            window.WebSocket = function(url, protocols) {
+              var urlStr = String(url || '');
+              // If this is a Vite HMR or development-client connection, close cleanly without error
+              if (urlStr.indexOf('vite-hmr') !== -1 || urlStr.indexOf('token=') !== -1) {
+                var fakeWs = new EventTarget();
+                fakeWs.readyState = 3; // CLOSED
+                fakeWs.bufferedAmount = 0;
+                fakeWs.extensions = '';
+                fakeWs.protocol = '';
+                fakeWs.binaryType = 'blob';
+                fakeWs.url = urlStr;
+                fakeWs.send = function() {};
+                fakeWs.close = function() {};
+                setTimeout(function() {
+                  try {
+                    var ev = new Event('close');
+                    if (typeof fakeWs.onclose === 'function') fakeWs.onclose(ev);
+                    fakeWs.dispatchEvent(ev);
+                  } catch (_) {}
+                }, 20);
+                return fakeWs;
+              }
+              return protocols !== undefined ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
+            };
+            window.WebSocket.prototype = NativeWebSocket.prototype;
+            window.WebSocket.CONNECTING = 0;
+            window.WebSocket.OPEN = 1;
+            window.WebSocket.CLOSING = 2;
+            window.WebSocket.CLOSED = 3;
+          }
+        } catch (_) {}
+      })();
+
+      // 3. Global runtime error reporting for immediate diagnostics
       (function() {
         function isViteHmrError(eventOrReason) {
           if (!eventOrReason) return false;
@@ -40,6 +78,13 @@
             event.stopImmediatePropagation();
             return true;
           }
+          var status = document.getElementById('vivid-startup-status');
+          var fallback = document.getElementById('vivid-startup-fallback');
+          if (status) {
+            status.style.color = '#f87171';
+            status.textContent = 'App error: ' + (event.message || event.error?.message || 'Script evaluation error');
+          }
+          if (fallback) fallback.style.display = 'block';
         }, true);
 
         window.addEventListener('unhandledrejection', function(event) {
@@ -48,6 +93,13 @@
             event.stopImmediatePropagation();
             return true;
           }
+          var status = document.getElementById('vivid-startup-status');
+          var fallback = document.getElementById('vivid-startup-fallback');
+          if (status) {
+            status.style.color = '#f87171';
+            status.textContent = 'Init error: ' + (event.reason?.message || String(event.reason));
+          }
+          if (fallback) fallback.style.display = 'block';
         }, true);
       })();
     </script>
@@ -71,10 +123,10 @@
       <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0a0a0a; color: #e5e5e5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; text-align: center;">
         <div style="width: 36px; height: 36px; border: 2.5px solid rgba(255,255,255,0.12); border-top-color: #10b981; border-radius: 50%; animation: vivid-spin 0.7s linear infinite; margin-bottom: 14px;"></div>
         <div style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: #f5f5f5;">VividSync Studio</div>
-        <div id="vivid-startup-status" style="font-size: 11px; color: #737373; margin-top: 4px;">Starting realtime studio...</div>
+        <div id="vivid-startup-status" style="font-size: 11px; color: #737373; margin-top: 4px;">Loading studio interface...</div>
         <div id="vivid-startup-fallback" style="display: none; margin-top: 16px;">
           <p style="font-size: 11px; color: #a3a3a3; max-width: 300px; margin-bottom: 12px; line-height: 1.5;">
-            Application loading took longer than usual. You can retry loading or launch in local mode.
+            Initial initialization took longer than expected. You can reload or start studio directly.
           </p>
           <button onclick="window.location.reload()" style="padding: 6px 16px; font-size: 11px; font-weight: 600; color: #ffffff; background: #262626; border: 1px solid #404040; border-radius: 6px; cursor: pointer;">
             Reload Studio
@@ -83,16 +135,16 @@
         <style>@keyframes vivid-spin { to { transform: rotate(360deg); } }</style>
       </div>
       <script>
-        // Startup watchdog: if bundle does not mount within 4.5 seconds, show reload helper
+        // Startup watchdog: if bundle does not mount within 9 seconds, show reload option
         setTimeout(function() {
           var root = document.getElementById('root');
           var fallback = document.getElementById('vivid-startup-fallback');
           var status = document.getElementById('vivid-startup-status');
           if (root && !root.hasAttribute('data-vivid-mounted')) {
-            if (status) status.textContent = 'Connecting to client environment...';
+            if (status) status.textContent = 'Preparing workspace...';
             if (fallback) fallback.style.display = 'block';
           }
-        }, 4500);
+        }, 9000);
       </script>
     </div>
     <noscript>

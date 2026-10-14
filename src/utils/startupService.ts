@@ -120,7 +120,7 @@ class StartupManager {
       const hasSpeech = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
       if (!hasCanvas) {
-        throw new Error('HTML5 Canvas 2D is not supported in this browser environment.');
+        this.log('HTML5 Canvas 2D check returned false or delayed context.', true);
       }
 
       this.state.hasAudioContext = hasAudio;
